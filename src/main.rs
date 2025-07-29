@@ -1,6 +1,7 @@
 /// Start with a naive version, using 8 bit words an floor(log(p))+1=32
 const NR_WORDS: usize = 32;
 const BASE: u16 = 1 << 8; // 256
+const WORD_LEN: usize = 8;
 struct Fe {
     words: [u8; NR_WORDS],
 }
@@ -76,7 +77,7 @@ fn mul_operand_scanning(first: [u8; NR_WORDS], second: [u8; NR_WORDS]) -> [u8; 2
             let prod =
                 (first[i] as u16) * (second[j] as u16) + (result[i + j] as u16) + (carry as u16);
             result[i + j] = prod as u8; // get lower part
-            carry = prod / BASE; // get higher part
+            carry = prod >> WORD_LEN; // get higher part
         }
         result[i + NR_WORDS - 1] = carry as u8;
     }
@@ -108,6 +109,22 @@ fn mul_product_scanning(first: [u8; NR_WORDS], second: [u8; NR_WORDS]) -> [u8; 2
     }
     // highest order word is not in the loop
     result[NR_WORDS - 2] = r1 as u8;
+    result
+}
+
+fn square(x: [u8; NR_WORDS]) -> [u8; 2 * NR_WORDS] {
+    let mut result = [0_u8; 2 * NR_WORDS];
+    for i in 0..NR_WORDS {
+        let s = (x[i] as u16) * (x[i] as u16) + (result[2 * i] as u16);
+        result[2 * i] = s as u8;
+        let mut carry = (s >> WORD_LEN);
+        for j in (i + 1)..(NR_WORDS - 1) {
+            let r = (result[i + j] as u32) + 2 * (x[i] as u32) * (x[j] as u32) + (carry as u32);
+            result[i + j] = r as u8;
+            carry = (r >> WORD_LEN) as u16;
+        }
+        result[i + NR_WORDS] = carry as u8;
+    }
     result
 }
 
@@ -163,6 +180,12 @@ fn barret_red(a: Fe) -> Fe {
 
 fn main() {
     println!("Hello, world!");
+    // let x = [
+        // 0x04, 0x82, 0x2e, 0xcb, 0xef, 0x66, 0xf5, 0x7e, 0x9f, 0x86, 0xcc, 0xe2, 0xc3, 0xd7, 0x9d,
+    //     0x51, 0xa1, 0x40, 0x0d, 0x79, 0x3f, 0x31, 0xdb, 0xee, 0x83, 0xf3, 0x91, 0xc2, 0xae, 0xfb,
+    //     0x15, 0x39,
+    // ];
+    // println!("square(x) {:?}", square(x))
 }
 
 #[cfg(test)]
@@ -187,7 +210,7 @@ mod tests {
     fn test_add_internal_carry() {
         let mut first = [0; NR_WORDS];
         let mut second = [0; NR_WORDS];
-        first[7] = ((1u16 << 64) - 1) as u8;
+        first[7] = ((1u16 << 8) - 1) as u8;
         second[7] = 5;
         let third = add(first, second);
         assert_eq!(third.1, false); // no carry
@@ -271,6 +294,7 @@ mod tests {
         }
     }
 
+    #[test]
     fn test_mul_neutral() {
         let mut first = [0; NR_WORDS];
         // ChatGPT gave me this number
@@ -283,5 +307,22 @@ mod tests {
         for i in 1..(2 * NR_WORDS - 1) {
             assert_eq!(third[i], 0);
         }
+    }
+
+    #[test]
+    fn test_square() {
+        let result = [
+            0x10, 0x10, 0x78, 0x53, 0x1d, 0xbe, 0x5c, 0xdd, 0x7e, 0x56, 0xa2, 0x96, 0xeb, 0x1c,
+            0x9e, 0xf4, 0x14, 0xc4, 0x84, 0xdc, 0x45, 0x42, 0xad, 0x1c, 0x70, 0x66, 0xa1, 0x4b,
+            0x5e, 0xa0, 0xdf, 0xf4, 0x20, 0x98, 0x40, 0x36, 0x50, 0xb4, 0xc9, 0x61, 0x51, 0xe9,
+            0xa8, 0x2c, 0x4d, 0x48, 0x9e, 0x6b, 0x01, 0xb3, 0xf7, 0x95, 0xe8, 0x11, 0xd0, 0xf9,
+            0x39, 0x13, 0xc1, 0x14, 0xf7, 0xcb, 0xba, 0x0c,
+        ];
+        let x = [
+            0x04, 0x82, 0x2e, 0xcb, 0xef, 0x66, 0xf5, 0x7e, 0x9f, 0x86, 0xcc, 0xe2, 0xc3, 0xd7,
+            0x9d, 0x51, 0xa1, 0x40, 0x0d, 0x79, 0x3f, 0x31, 0xdb, 0xee, 0x83, 0xf3, 0x91, 0xc2,
+            0xae, 0xfb, 0x15, 0x39,
+        ];
+        assert_eq!(square(x), result)
     }
 }
